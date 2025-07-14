@@ -1,8 +1,10 @@
 import mongoose from "mongoose";
 
-if(!process.env.MONGO_URI){
-    console.log("there is not mongourl in env");
+// Make sure dotenv.config() is called in index.js before this file is imported
+if (!process.env.MONGO_URI) {
+    console.log("MONGO_URI is missing in environment variables");
 }
+
 
 const connectDb = async()=>{
     try {

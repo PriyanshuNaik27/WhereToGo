@@ -1,9 +1,15 @@
 import express from "express"
+
+//note
+// Always load environment variables FIRST before using them anywhere else
 import dotenv from "dotenv";
+dotenv.config();
+
+
 import app from "./app.js"
 import connectDb from "./config/connect.js";
 
-dotenv.config();
+
 
 app.on("error",(error)=>{
     console.log("Error",error);
