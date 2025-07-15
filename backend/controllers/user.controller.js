@@ -1,6 +1,30 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { z } from "zod";
+import User from "../models/user.model.js"
+import { ApiResponse } from "../utils/ApiResponse.js";
+
+
+//method 
+
+const generateAcessAndRefreshToken = async(userId)=>{
+  try {
+    const user = await User.findById(userId);
+    const accessToken = user.generateAcessToken();
+    const refreshToken = user.generateRefreshToken();
+    user.refreshToken=refreshToken;
+    // user.save();  we dont use this as we are not passing password which is required field in model
+    await user.save({validateBeforeSave:false});
+    return {refreshToken,accessToken}
+  } catch (error) {
+      throw new ApiError(500,"error in genrerating access and refresh token ");
+  }
+}
+
+
+
+
+
 const registerUser = asyncHandler(async (req, res) => {
   //get user details from frontend by req.body
   // req.body -> username ,email, password;
@@ -44,6 +68,93 @@ const registerUser = asyncHandler(async (req, res) => {
   res.json({
     gotEmail: email,
   });
+
+  const existedUser = User.findOne({
+    $or : [{userName},{email}]
+  })
+
+  if(existedUser){
+    throw new ApiError(409,"USER or EMAIL already exists");
+  }
+
+  const user = await User.create({
+    userName: userName.toLowercase(),
+    email,
+    password
+  })
+
+  const createdUser = await User.findById(user._id).select(
+    "-password refreshToken"
+  )// kya kya nhi chaiye 
+
+  if(!createdUser){
+    throw new ApiError(500,"server error: while registering user");                                                                     
+  }
+
+  return res.status(201).json(
+    new ApiResponse(200,createdUser,"user registered succesfully")
+  )
+
 });
 
-export { registerUser };
+
+
+const loginUser = asyncHandler(async(req,res)=>{
+  //req->body 
+  //username or email
+  //check for password
+  //if password not correct - > error
+  // if password correct -> create acces and refresh token 
+  //send cookies 
+  //send res -> succesfully login 
+
+  const {email,userName,password} = req.body();
+
+  if(!userName || !email){
+    throw new ApiError(400,"EMAIL OR USSERNAME is required");
+  }
+
+  const user = await User.findOne({
+    $or:[{userName},{email}]
+  })
+
+  if(!user){
+   throw new  ApiError(404,"user is not registered");
+  }
+
+  const isPasswordValid = await user.isPasswordCorrect(password);
+  if(!isPasswordValid){
+    throw new ApiError(401,"PASSWORD IS INCORRECT");
+  }
+
+  
+  const {refreshToken,accessToken} = await  generateAcessAndRefreshToken(user._id)
+
+  const loggedInUser = await User.findById(user._id).select(
+    "-password -refreshToken"
+  )
+
+  //for cookies - to not make it modifly by frontend
+  const options ={
+    httpOnly :true,
+    secure:true
+  } 
+
+  return res.status(200).cookie("accesToken", accessToken,options).
+  cookie("refreshToken",refreshToken,options).json(
+    new ApiResponse(200,{
+      user:loggedInUser,accessToken,refreshToken
+    },"user logged in succesfulyy")
+  )
+
+})
+
+
+
+
+
+
+export { registerUser,loginUser };
+
+
+
